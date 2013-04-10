@@ -5,6 +5,8 @@ EXEC        = mysh
 DEPS        =  
 OBJ         = mysh.o
 
+.PHONY: clean cleanall run
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(LDFLAGS)
 
@@ -16,3 +18,6 @@ clean:
 
 cleanall:
 	rm -f *.o $(EXEC)
+
+run:
+	@. update_path.sh && mysh
