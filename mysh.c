@@ -14,7 +14,7 @@
 void printPrompt() {
 	char cwd[FILENAME_MAX] = "";
 	if (!getcwd(cwd, sizeof(cwd))) {
-		// TODO: handle error, store some indicator of unknown CWD?
+		/* TODO: handle error, store some indicator of unknown CWD? */
 		strcpy(cwd, "");
 	}
 
@@ -27,7 +27,7 @@ void printPrompt() {
 char* getCommand() {
 	char* command = readline("");
 
-	// if non-empty add to history
+	/* if non-empty add to history */
 	if (command &&  *command)
 		add_history(command);
 
@@ -42,7 +42,7 @@ char** parseLine(char* line) {
 	char* temp    = line;
 	size_t count  = 0;
 
-	// count the spaces in the command, will be >= to number of valid strings in the command
+	/* count the spaces in the command, will be >= to number of valid strings in the command */
 	while (*temp) {
 		if ( ' ' == *temp)
 			count++;
@@ -59,7 +59,7 @@ char** parseLine(char* line) {
 
 		while (token) {
 			if (*token) {            /* token is not an empty string */
-				// TODO: need to handle redirections here.
+				/* TODO: need to handle redirections here. */
 				*(result + idx++) = strdup(token);
 			}
 			token = strtok(0, " ");
@@ -82,7 +82,7 @@ int main(int argc, char ** argv) {
 		command  = parseLine(lineRead);
 
 		if (! command) {
-			//TODO: handle command parse error
+			/*TODO: handle command parse error */
 			continue;
 		}
 
@@ -93,7 +93,7 @@ int main(int argc, char ** argv) {
 		if (childPID == 0) {   /* this is the child */
 			execvp(*command, command);
 		} else {               /* this is the parent */
-			// TODO: do we need to customize handling of errors?
+			/* TODO: do we need to customize handling of errors? */
 			waitpid(childPID, NULL, 0);
 		}
 	}
