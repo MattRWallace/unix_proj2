@@ -1,17 +1,20 @@
 CC          = gcc
-LDFLAGS     = -lreadline
+LDFLAGS     = 
 CFLAGS      = -Wall -pedantic -g
-EXEC        = mysh
 DEPS        =  
 OBJ         = mysh.o
 
+SHELL_FOLD  = shell
+CAT_FOLD    = mycat
+CD_FOLD     = mycd
+LS_FOLD     = myls
+
+EXEC        = mysh
+
 .PHONY: clean cleanall run
 
-%.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS) $(LDFLAGS)
-
-$(EXEC): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+mysh:
+	@$(MAKE) -C $(SHELL_FOLD)
 
 clean:
 	rm -f *.o
