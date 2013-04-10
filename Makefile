@@ -1,26 +1,24 @@
-CC          = gcc
-LDFLAGS     = 
-CFLAGS      = -Wall -pedantic -g
-DEPS        =  
-OBJ         = mysh.o
+SHELL_FOLD  = mysh_src
+CAT_FOLD    = mycat_src
+CD_FOLD     = mycd_src
+LS_FOLD     = myls_src
 
-SHELL_FOLD  = shell
-CAT_FOLD    = mycat
-CD_FOLD     = mycd
-LS_FOLD     = myls
-
-EXEC        = mysh
-
-.PHONY: clean cleanall run
+.PHONY: clean run
 
 mysh:
 	@$(MAKE) -C $(SHELL_FOLD)
 
-clean:
-	rm -f *.o
+mycat:
+	@$(MAKE) -C $(CAT_FOLD)
 
-cleanall:
-	rm -f *.o $(EXEC)
+mycd:
+	@$(MAKE) -C $(CD_FOLD)
+
+myls:
+	@$(MAKE) -C $(LS_FOLD)
+
+clean:
+	rm -f mysh mycat mycd myls
 
 run:
 	@. update_path.sh && mysh

@@ -1,17 +1,17 @@
 CC          = gcc
-LDFLAGS     = -lreadline
+LDFLAGS     =
 CFLAGS      = -Wall -pedantic -g
 DEPS        =  
-OBJ         = mysh.o
+OBJ         = myls.o
 
-BUILDDIR    = ../
+EXEC        = myls
 
-.PHONY: clean cleanall run
+.PHONY: clean
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(LDFLAGS)
 
-../mysh: $(OBJ)
+../$(EXEC): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 clean:
