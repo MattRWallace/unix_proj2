@@ -86,6 +86,9 @@ int main(int argc, char ** argv) {
 			continue;
 		}
 
+		if (strcmp("exit", command[0]) == 0)
+			exit(EXIT_SUCCESS);
+
 		childPID = fork();
 		if (childPID == 0) {   /* this is the child */
 			execvp(*command, command);
