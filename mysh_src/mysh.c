@@ -35,7 +35,7 @@ char* getCommand() {
 }
 
 /*
- * Tokenize the command string and handle any redirections
+ * Tokenize the command string
  */
 char** parseLine(char* line) {
 	char** result = 0;
@@ -86,11 +86,51 @@ int main(int argc, char ** argv) {
 			continue;
 		}
 
+		/* command 'exit' exits the shell */
 		if (strcmp("exit", command[0]) == 0)
 			exit(EXIT_SUCCESS);
 
-		childPID = fork();
-		if (childPID == 0) {   /* this is the child */
+		/* attempt to fork the process */
+		if ((childPID = fork()) == -1){
+			perror("fork");
+		} else if (childPID == 0) {   /* this is the child */
+			char** cursor;
+
+			/* first check for a pipe */
+			cursor = command;
+			while (cursor && (strcmp(*cursor, "|") != 0))
+				cursor++;
+
+			if (cursor) {
+				cursor++;
+				/* pipe! */
+				continue;
+			}
+
+			/* check for redirections */
+			cursor = command;
+			while (cursor && (strcmp(*cursor, ">") !=0))
+				cursor++;
+
+			if (cursor) {
+				/* link outputs */
+
+				/* remove "> dest" from array */
+			}
+
+
+			cursor = command;
+			while (cursor && (strcmp(*cursor, "<") !=0))
+				cursor++;
+
+			if (cursor) {
+				/* link outputs */
+
+				/* remove "< src" from array */
+			}
+
+
+
 			execvp(*command, command);
 		} else {               /* this is the parent */
 			/* TODO: do we need to customize handling of errors? */
