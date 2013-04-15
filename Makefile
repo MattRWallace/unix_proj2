@@ -1,9 +1,9 @@
 SHELL_FOLD  = mysh_src
 CAT_FOLD    = mycat_src
-CD_FOLD     = mycd_src
+CP_FOLD     = mycp_src
 LS_FOLD     = myls_src
 
-.PHONY: clean run mysh mycat mycd myls
+.PHONY: clean run mysh mycat mycp myls
 
 mysh:
 	@$(MAKE) -C $(SHELL_FOLD)
@@ -12,13 +12,13 @@ mycat:
 	@$(MAKE) -C $(CAT_FOLD)
 
 mycd:
-	@$(MAKE) -C $(CD_FOLD)
+	@$(MAKE) -C $(CP_FOLD)
 
 myls:
 	@$(MAKE) -C $(LS_FOLD)
 
 clean:
-	rm -f mysh mycat mycd myls
+	rm -f mysh mycat mycp myls
 
 run:
 	@./mysh

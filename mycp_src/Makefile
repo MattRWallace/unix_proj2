@@ -2,9 +2,9 @@ CC          = gcc
 LDFLAGS     = 
 CFLAGS      = -Wall -pedantic -g
 DEPS        =  
-OBJ         = mycd.o
+OBJ         = mycp.o
 
-EXEC        = mycd
+EXEC        = mycp
 
 .PHONY: clean
 
