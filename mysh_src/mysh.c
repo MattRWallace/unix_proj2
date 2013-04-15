@@ -111,6 +111,56 @@ char** parseLine(char* line) {
 	return result;
 }
 
+int execPipe(char** command1, char** command2) {
+	int pfd[2];
+	pid_t cpid1, cpid2;
+
+	if (pipe(pfd) == -1) {
+		perror("pipe");
+		return -1;
+	}
+
+
+	cpid1 = fork();
+	if (cpid1 == -1) {
+		perror("fork");
+		return -1;
+	}
+
+	if (cpid1 == 0) {
+		dup2(pfd[1], 1);
+		close(pfd[0]);
+		close(pfd[1]);
+		execvp(*command1, command1);
+	} else {
+		close(pfd[1]);
+	}
+
+	cpid2 = fork();
+	if (cpid2 == -1) {
+		perror("fork");
+		return -1;
+	}
+
+	if (cpid2 == 0) {
+		dup2(pfd[0], 0);
+		close(pfd[0]);
+		close(pfd[1]);
+		execvp(*command2, command2);
+	}
+
+	/* wait for processes to exit */
+	/*waitpid(cpid1, NULL, 0);*/
+	waitpid(cpid2, NULL, 0);
+
+	/* close the extra file descriptors */
+	close(pfd[0]);
+	close(pfd[1]);
+
+	/* return true */
+	return 1;
+}
+
 int main(int argc, char ** argv) {
 	pid_t childPID;
 	char* lineRead;
@@ -124,7 +174,8 @@ int main(int argc, char ** argv) {
 	}
 
 	while (1) {
-		lineRead = getCommand();
+		lineRead = trim(getCommand());
+		command  = parseLine(lineRead);
 
 		if (! lineRead) {
 			/*TODO: handle command parse error */
@@ -132,29 +183,31 @@ int main(int argc, char ** argv) {
 			continue;
 		}
 
-		/* trim any whitespace from front and end */
-		lineRead = trim(lineRead);
-		command  = parseLine(lineRead);
-
 		/* command 'exit' exits the shell */
 		if (strcmp("exit", lineRead) == 0)
 			exit(EXIT_SUCCESS);
+
+		/* first check for a pipe */
+		cursor = command;
+		while (cursor && *cursor && (strcmp(*cursor, "|") != 0))
+			cursor++;
+
+		if (*cursor) {
+			cursor++;
+			*(cursor-1) = 0;
+			if (! execPipe(command, cursor)) {
+				printf("Pipe failed\n");
+			} else {
+				printf ("pipe appears to have succeeded\n");
+			}
+			continue;
+		}
 
 		/* attempt to fork the process */
 		if ((childPID = fork()) == -1){
 			perror("fork");
 		} else if (childPID == 0) {   /* this is the child */
-			/* first check for a pipe */
-			cursor = command;
-			while (cursor && *cursor && (strcmp(*cursor, "|") != 0))
-				cursor++;
 
-			if (*cursor) {
-				cursor++;
-				/* pipe! */
-				printf("PIPE!\n");
-				continue;
-			}
 
 			/* check for redirections */
 			cursor = command;
@@ -189,7 +242,7 @@ int main(int argc, char ** argv) {
 
 			execvp(*command, command);
 
-			// if child returns then print out the error
+			/* if child returns then print out the error */
 			perror("exec");
 		} else {               /* this is the parent */
 			/* TODO: do we need to customize handling of errors? */
