@@ -3,7 +3,7 @@ CAT_FOLD    = mycat_src
 CD_FOLD     = mycd_src
 LS_FOLD     = myls_src
 
-.PHONY: clean run
+.PHONY: clean run mysh mycat mycd myls
 
 mysh:
 	@$(MAKE) -C $(SHELL_FOLD)
@@ -21,4 +21,4 @@ clean:
 	rm -f mysh mycat mycd myls
 
 run:
-	@. update_path.sh && mysh
+	@./mysh
