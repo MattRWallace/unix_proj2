@@ -7,6 +7,7 @@
 #include <readline/history.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 /*
  * Prints the command prompt
@@ -163,9 +164,12 @@ int execPipe(char** command1, char** command2) {
 
 int main(int argc, char ** argv) {
 	pid_t childPID;
-	char* lineRead;
+	char*  lineRead;
 	char** command;
 	char** cursor;
+	char*  input;
+	char*  output;
+	int infile, outfile;
 
 	/* set the working directory */
 	if (! updateWD()) {
@@ -174,6 +178,8 @@ int main(int argc, char ** argv) {
 	}
 
 	while (1) {
+		infile = outfile = 0;
+
 		lineRead = trim(getCommand());
 		command  = parseLine(lineRead);
 
@@ -197,48 +203,69 @@ int main(int argc, char ** argv) {
 			*(cursor-1) = 0;
 			if (! execPipe(command, cursor)) {
 				printf("Pipe failed\n");
-			} else {
-				printf ("pipe appears to have succeeded\n");
 			}
 			continue;
 		}
+
+
+
+		/* check for redirections */
+		cursor = command;
+		while (cursor && *cursor && *cursor[0] != '>')
+			cursor++;
+
+		if (*cursor) {
+			/* ">dest" format */
+			if (strcmp(*cursor, ">") != 0) {
+				output = (*cursor) + 1;
+				printf("output to %s\n", output);
+
+				/* TODO: remove ">dest" from array */
+			}
+			/*  "< dest" format */
+			else {
+				output = *(cursor + 1);
+				printf("output to %s\n", output);
+				/* TODO: remove "> dest" from array */
+			}
+
+			/* TODO: verify these are right flags */
+			outfile = open(output, O_CREAT | O_WRONLY | O_TRUNC, 0777);
+			dup2(outfile, 1);
+		}
+
+
+		cursor = command;
+		while (cursor && *cursor && *cursor[0] != '<')
+			cursor++;
+
+		if (*cursor) {
+			/* "<dest" format */
+			if (strcmp(*cursor, "<") != 0) {
+				input = (*cursor) + 1;
+				printf("input to %s\n", input);
+
+				/* TODO: remove "<src" from array */
+			}
+			/*  "< src" format */
+			else {
+				input = *(cursor + 1);
+				printf("intput to %s\n", input);
+				/* TODO: remove "< src" from array */
+			}
+
+			/* TODO: verify these are right flags */
+			infile = open(output, O_RDONLY, 0777);
+			dup2(infile, 0);
+		}
+
+
 
 		/* attempt to fork the process */
 		if ((childPID = fork()) == -1){
 			perror("fork");
 		} else if (childPID == 0) {   /* this is the child */
 
-
-			/* check for redirections */
-			cursor = command;
-			while (cursor && *cursor && *cursor[0] != '>')
-				cursor++;
-
-			if (*cursor) {
-				/* one arg? (>dest) */
-
-				/* remove ">dest" from array */
-
-
-				/* two args? (> dest) */
-
-				/* remove "> dest" from array */
-			}
-
-
-			cursor = command;
-			while (cursor && *cursor && *cursor[0] != '<')
-				cursor++;
-
-			if (*cursor) {
-				/* one arg? (<src) */
-
-				/* remove "<src" from the array */
-
-				/* two args? (< src) */
-
-				/* remove "< src" from array */
-			}
 
 			execvp(*command, command);
 
@@ -248,5 +275,11 @@ int main(int argc, char ** argv) {
 			/* TODO: do we need to customize handling of errors? */
 			waitpid(childPID, NULL, 0);
 		}
+
+		/* reset the standard IO */
+		if (infile)
+			dup2(infile, 0);
+		if (outfile)
+			dup2(outfile, 1);
 	}
 }
