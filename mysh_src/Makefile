@@ -1,6 +1,6 @@
 CC          = gcc
 LDFLAGS     = -lreadline
-CFLAGS      = -Wall -pedantic -g -std=c99
+CFLAGS      = -pedantic -g -std=c99
 DEPS        =  
 OBJ         = mysh.o
 
