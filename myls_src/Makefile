@@ -1,6 +1,6 @@
 CC          = gcc
 LDFLAGS     =
-CFLAGS      = -Wall -pedantic -g
+CFLAGS      = -Wall -pedantic -g -std=c99
 DEPS        =  
 OBJ         = myls.o
 
