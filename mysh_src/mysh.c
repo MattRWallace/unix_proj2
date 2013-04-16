@@ -9,9 +9,10 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-#define UMASK  0777
-#define STDIN  0
-#define STDOUT 1
+#define UMASK      0777
+#define STDIN      0
+#define STDOUT     1
+#define WHITESPACE "\x20\x09\x0a\x0b\x0c\x0d"
 
 /*
  * Prints the command prompt
@@ -104,7 +105,7 @@ char** parseLine(char* line) {
 
 	if (result) {
 		size_t idx = 0;
-		char* token = strtok(line, "\x20\x09\x0a\x0b\x0c\x0d");
+		char* token = strtok(line, WHITESPACE);
 
 		while (token) {
 			*(result + idx++) = strdup(token);
@@ -223,101 +224,74 @@ int execRedirect(char** command, char* input, char* output) {
 }
 
 int main(int argc, char ** argv) {
-	pid_t childPID;
-	char*  lineRead;
-	char** command;
-	char** cursor;
-	char*  input;
-	char*  output;
-
 	/* set the working directory */
 	if (! updateWD()) {
 		printf("Error adding CWD to the path");
 		return 1;
 	}
 
+
+
 	while (1) {
-		input = output = 0;
+		char* lineRead;
+		char* cursor;
+		char  input[FILENAME_MAX]  = { 0 };
+		char  output[FILENAME_MAX] = { 0 };
+
+		// get the line
 		lineRead = trim(getCommand());
-		command  = parseLine(lineRead);
 
-		if (! lineRead) {
-			/*TODO: handle command parse error */
-			printf("Unknown command");
+		if (! lineRead)   // blank command, do nothing
 			continue;
-		}
 
-		/* command 'exit' exits the shell */
+		// command 'exit' exits the shell
 		if (strcmp("exit", lineRead) == 0)
 			exit(EXIT_SUCCESS);
 
-		/* first check for a pipe */
-		cursor = command;
-		while (cursor && *cursor && (strcmp(*cursor, "|") != 0))
-			cursor++;
+		// first check for a pipe
 
-		if (*cursor) {  /* a pipe is needed */
+		cursor = strstr(lineRead, "|");
+
+		if (cursor) {
 			cursor++;
-			*(cursor-1) = 0;
-			if (! execPipe(command, cursor)) {
+			*(cursor - 1) = 0;
+			if (! execPipe(parseLine(lineRead), parseLine(cursor)))
 				printf("Pipe failed\n");
-			}
 			continue;
 		}
 
 		/* check for redirections */
-		cursor = command;
-		while (cursor && *cursor && *cursor[0] != '>')
-			cursor++;
+		cursor = strstr(lineRead, ">");
+		if (cursor) {
+			char* end = cursor;
+			end += (*(cursor+1) == ' ') ? 2 : 1;
+			sscanf(end, "%s", output);
+			end += strlen(output);
 
-		if (*cursor) {
-			/* ">dest" format */
-			if (strcmp(*cursor, ">") != 0) {
-				output = (*cursor) + 1;
-
-				/* TODO: remove ">dest" from array */
-			}
-			/*  "< dest" format */
-			else {
-				output = *(cursor + 1);
-				/* TODO: remove ">" "dest" from array */
-			}
+			memmove(cursor, end, strlen(end)+1);
 		}
 
+		cursor = strstr(lineRead, "<");
+		if (cursor) {
+			char* end = cursor;
+			end += (*(cursor+1) == ' ') ? 2 : 1;
+			sscanf(end, "%s", input);
+			end += strlen(input);
 
-		cursor = command;
-		while (cursor && *cursor && *cursor[0] != '<')
-			cursor++;
-
-		if (*cursor) {
-			/* "<dest" format */
-			if (strcmp(*cursor, "<") != 0) {
-				input = (*cursor) + 1;
-				/* TODO: remove "<src" from array */
-			}
-			/*  "< src" format */
-			else {
-				input = *(cursor + 1);
-				printf("intput to %s\n", input);
-				/* TODO: remove "<" "src" from array */
-			}
+			memmove(cursor, end, strlen(end)+1);
 		}
 
-		if (input || output) {     /* a redirection is needed */
-			if ( ! execRedirect(command, input, output)) {
-				printf("redirection failure.\n");
-			}
+		if (strlen(input) || strlen(output)) {
+			execRedirect(parseLine(lineRead), input, output);
 			continue;
 		}
 
-
-
+		pid_t childPID;
 		/* attempt to fork the process */
 		if ((childPID = fork()) == -1){
 			perror("fork");
 		} else if (childPID == 0) {   /* this is the child */
-
-
+			char** command = parseLine(lineRead);
 			execvp(*command, command);
 
 			/* if child returns then print out the error */
