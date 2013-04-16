@@ -9,6 +9,10 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
+#define UMASK  0777
+#define STDIN  0
+#define STDOUT 1
+
 /*
  * Prints the command prompt
  */
@@ -162,6 +166,62 @@ int execPipe(char** command1, char** command2) {
 	return 1;
 }
 
+/* TODO: add error checking to this function */
+int execRedirect(char** command, char* input, char* output) {
+	/* file descriptors for input and output files */
+	int infile, outfile;
+
+	/* backup original stdin and stdout */
+	int real_stdin = dup(0);
+	int real_stdout = dup(1);
+
+	/* child PID */
+	pid_t childPID;
+
+
+	/* check and open each file if needed */
+	if (input) {
+		infile = open(input, O_RDONLY, UMASK);
+		dup2(infile, 0);
+	}
+
+	if (output) {
+		outfile = open(output, O_CREAT | O_WRONLY | O_TRUNC, UMASK);
+		dup2(outfile, 1);
+	}
+
+	/* exec */
+	if ((childPID = fork()) == -1){
+		perror("fork");
+	} else if (childPID == 0) {   /* this is the child */
+
+		execvp(*command, command);
+
+		/* if child returns then print out the error */
+		perror("exec");
+	} else {               /* this is the parent */
+		/* TODO: do we need to customize handling of errors? */
+		waitpid(childPID, NULL, 0);
+	}
+
+	/* redirect IO and close the files */
+	if (input) {
+		dup2(real_stdin, 0);
+		close(infile);
+	}
+
+	if (output) {
+		dup2(real_stdout, 1);
+		close(outfile);
+	}
+
+	/* close the backups */
+	close(real_stdin);
+	close(real_stdout);
+
+	return 1;
+}
+
 int main(int argc, char ** argv) {
 	pid_t childPID;
 	char*  lineRead;
@@ -169,7 +229,6 @@ int main(int argc, char ** argv) {
 	char** cursor;
 	char*  input;
 	char*  output;
-	int infile, outfile;
 
 	/* set the working directory */
 	if (! updateWD()) {
@@ -178,8 +237,7 @@ int main(int argc, char ** argv) {
 	}
 
 	while (1) {
-		infile = outfile = 0;
-
+		input = output = 0;
 		lineRead = trim(getCommand());
 		command  = parseLine(lineRead);
 
@@ -198,7 +256,7 @@ int main(int argc, char ** argv) {
 		while (cursor && *cursor && (strcmp(*cursor, "|") != 0))
 			cursor++;
 
-		if (*cursor) {
+		if (*cursor) {  /* a pipe is needed */
 			cursor++;
 			*(cursor-1) = 0;
 			if (! execPipe(command, cursor)) {
@@ -206,8 +264,6 @@ int main(int argc, char ** argv) {
 			}
 			continue;
 		}
-
-
 
 		/* check for redirections */
 		cursor = command;
@@ -218,20 +274,14 @@ int main(int argc, char ** argv) {
 			/* ">dest" format */
 			if (strcmp(*cursor, ">") != 0) {
 				output = (*cursor) + 1;
-				printf("output to %s\n", output);
 
 				/* TODO: remove ">dest" from array */
 			}
 			/*  "< dest" format */
 			else {
 				output = *(cursor + 1);
-				printf("output to %s\n", output);
-				/* TODO: remove "> dest" from array */
+				/* TODO: remove ">" "dest" from array */
 			}
-
-			/* TODO: verify these are right flags */
-			outfile = open(output, O_CREAT | O_WRONLY | O_TRUNC, 0777);
-			dup2(outfile, 1);
 		}
 
 
@@ -243,20 +293,21 @@ int main(int argc, char ** argv) {
 			/* "<dest" format */
 			if (strcmp(*cursor, "<") != 0) {
 				input = (*cursor) + 1;
-				printf("input to %s\n", input);
-
 				/* TODO: remove "<src" from array */
 			}
 			/*  "< src" format */
 			else {
 				input = *(cursor + 1);
 				printf("intput to %s\n", input);
-				/* TODO: remove "< src" from array */
+				/* TODO: remove "<" "src" from array */
 			}
+		}
 
-			/* TODO: verify these are right flags */
-			infile = open(output, O_RDONLY, 0777);
-			dup2(infile, 0);
+		if (input || output) {     /* a redirection is needed */
+			if ( ! execRedirect(command, input, output)) {
+				printf("redirection failure.\n");
+			}
+			continue;
 		}
 
 
@@ -275,11 +326,5 @@ int main(int argc, char ** argv) {
 			/* TODO: do we need to customize handling of errors? */
 			waitpid(childPID, NULL, 0);
 		}
-
-		/* reset the standard IO */
-		if (infile)
-			dup2(infile, 0);
-		if (outfile)
-			dup2(outfile, 1);
 	}
 }
