@@ -1,16 +1,12 @@
-#include<tzfile.h>
-#include<fts.h>
-#include<err.h>
-
-
-
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <dirent.h>
+#include <err.h>
 #include <unistd.h>
 #include <termios.h>
 #include <pwd.h>
@@ -21,8 +17,7 @@
 #include <string.h>
 
 struct fsInfo{
-     int total_size;
-     long total_blocksize;
+     int total_blocksize;
      int max_file_size;
      int max_hardlinks;
      int max_user_name;
@@ -80,8 +75,8 @@ static void printtime(time_t ftime)
 	}
 	(void)putchar(' ');
 }
-int filter(const struct dirent *d){
-    if(*(d->d_name) == '.')
+static int filter(const struct dirent *d){
+    if((strcmp(d->d_name, ".") == 0) || (strcmp(d->d_name, "..") == 0))
         return 0;
     else return 1;
 
@@ -132,7 +127,8 @@ void display(char *argv){
     struct dirent **ent;
     int entries, i;
 
-    entries = scandir(argv, &ent, filter, alphasort);
+    if((entries = scandir(argv, &ent, filter, alphasort)) == NULL)
+        err(EXIT_FAILURE, NULL);
 
     if(column_flag){
         int len, max_name_len = 0;
@@ -145,22 +141,20 @@ void display(char *argv){
     }
     else{
         int max;
-        int buf[4];
         struct stat *st;
         struct fsInfo fsi;
         struct passwd *pw;
         struct group *grp;
-        (void)getbsize(buf, &blocksize);
         st = (struct stat*)malloc(entries * sizeof(struct stat));
         fsi.max_file_size = 0;
         fsi.max_hardlinks = 0;
         fsi.max_user_name = 0;
         fsi.max_group_name = 0;
         fsi.total_size = 0;
-        fsi.total_blocksize = blocksize;
+        fsi.total_blocksize = 0;
         for(i = 0; i < entries; ++i){
             lstat(ent[i]->d_name, &st[i]);
-            fsi.total_size += st[i].st_size;
+            fsi.total_blocksize += st[i].st_blocks;
             pw = getpwuid(st[i].st_uid);
             grp = getgrgid(st[i].st_gid);
             if((max = st[i].st_nlink) > fsi.max_hardlinks)
@@ -183,7 +177,6 @@ void printSCol(struct dirent **ent, struct stat *st, struct fsInfo fsi, int entr
     struct group *grp;
 
     printf("total %ld\n", fsi.total_blocksize);
-    printf("total %d\n", fsi.total_size);
     for(row = 0; row < entries; row++){
         printf("%-10.10s ", sperm(st[row].st_mode));
         printf("%*d ", fsi.max_hardlinks, st[row].st_nlink);
