@@ -15,46 +15,20 @@
 #define WHITESPACE "\x20\x09\x0a\x0b\x0c\x0d"
 #define LARGE_BUF  4096
 
+// prototypes
+
+void nl2space(char*);
+int updateWD();
+char* getPrompt(char**);
+char* getCommand(char**);
+int countDelims(char*, char*);
+void splitLine(char*, char**, const char);
+void exec(char**, char**);
+void processPipes(char*);
+char* resolveSubshells(const char*);
+
 /*
- * Takes a char* as an argument and allocates a character
- * array with the text of the prompt.  The string must be
- * freed by the user.
- */
-void getPrompt(char* prompt) {
-    char cwd[FILENAME_MAX] = "";
-    if (!getcwd(cwd, sizeof(cwd))) {
-        strcpy(cwd, "?");
-    }
-
-    sprintf(prompt, "%s$ ", cwd);
-}
-
-/* adds the current working directory to the path so that we can find our
-   custom executables */
-int updateWD() {
-    char cwd[FILENAME_MAX];
-    const char* path = getenv("PATH");
-    int size;
-    char* newPath;
-
-    if (! getcwd(cwd, sizeof(cwd))) {
-        perror("getcwd");
-        return 0;
-    }
-    if (! path)
-        return 0;
-
-    size = sizeof(path) + sizeof(cwd) + 10;
-    newPath = malloc(size);
-
-    sprintf(newPath, "%s:%s", path, cwd);
-    setenv("PATH", newPath, 1);
-    free (newPath);
-
-    return 1;
-}
-
-/* count the spaces in the command */
+// count the spaces in the command
 int countWords(char* string) {
 	int count = 0;
     while (*string) {
@@ -65,19 +39,7 @@ int countWords(char* string) {
 	return count;
 }
 
-/* remove all spaces from a cstring */
-void replaceSpaces(char* string) {
-	while (*string != '\0') {
-		if (*string == '\n') {
-			*string = ' ';
-			++string;
-		} else {
-			++string;
-		}
-	}
-}
-
-/* trim whitepsace from string */
+// trim whitepsace from string
 char* trim(char* string) {
     // bail if NULL
     if (! string)
@@ -94,38 +56,6 @@ char* trim(char* string) {
     }
 
     return string;
-}
-
-/*
- * retrieves a command from the user
- */
-char* getCommand(char** command) {
-    char* prompt = malloc(sizeof(char) * FILENAME_MAX);
-	getPrompt(prompt);
-    *command = readline(prompt);
-    free(prompt);
-
-    /* if non-empty add to history */
-    if (command &&  *command)
-        add_history(*command);
-
-    return *command;
-}
-
-/*
- * Tokenize the command string
- */
-void parseLine(char* line, char** result) {
-    if (result) {
-        size_t idx = 0;
-        char* token = strtok(line, WHITESPACE);
-
-        while (token) {
-            *(result + idx++) = strdup(token);
-            token = strtok(0, " ");
-        }
-        *(result + idx) = 0;          /* add terminating null */
-    }
 }
 
 int execPipe(char** command1, char** command2) {
@@ -165,30 +95,30 @@ int execPipe(char** command1, char** command2) {
         execvp(*command2, command2);
     }
 
-    /* wait for processes to exit */
-    /*TODO: waitpid(cpid1, NULL, 0);*/
+    // wait for processes to exit
+    //TODO: waitpid(cpid1, NULL, 0);
     waitpid(cpid2, NULL, 0);
 
-    /* close the extra file descriptors */
+    // close the extra file descriptors
     close(pfd[0]);
     close(pfd[1]);
 
-    /* return true */
+    // return true
     return 1;
 }
 
 int execRedirect(char** command, char* input, char* output) {
-    /* file descriptors for input and output files */
+    // file descriptors for input and output files
     int infile, outfile;
 
-    /* backup original stdin and stdout */
+    // backup original stdin and stdout
     int real_stdin = dup(STDIN);
     int real_stdout = dup(STDOUT);
 
-    /* child PID */
+    // child PID
     pid_t childPID;
 
-    /* check and open each file if needed */
+    // check and open each file if needed
     if (strlen(input) != 0) {
         if ((infile = open(input, O_RDONLY, UMASK)) == -1) {
             perror(input);
@@ -206,44 +136,285 @@ int execRedirect(char** command, char* input, char* output) {
         dup2(outfile, STDOUT);
     }
 
-    /* exec */
+    // exec
     if ((childPID = fork()) == -1){
         perror("fork");
-    } else if (childPID == 0) {   /* this is the child */
+    } else if (childPID == 0) {   // this is the child
 
         execvp(*command, command);
 
-        /* if child returns then print out the error */
+        // if child returns then print out the error
         perror("exec");
-    } else {               /* this is the parent */
-        /* TODO: do we need to customize handling of errors? */
+    } else {               // this is the parent
+        // TODO: do we need to customize handling of errors?
         waitpid(childPID, NULL, 0);
     }
 
-    /* redirect IO and close the files */
-    if (input) {
+    // redirect IO and close the files
+    if (strlen(input) != 0) {
         dup2(real_stdin, STDIN);
         close(infile);
     }
 
-    if (output) {
+    if (strlen(output) != 0) {
         dup2(real_stdout, STDOUT);
         close(outfile);
     }
 
-    /* close the backups */
+    // close the backups
     close(real_stdin);
     close(real_stdout);
 
     return 1;
 }
+*/
 
-int main(int argc, char ** argv) {
-    /* backup original stdin and stdout */
+/* ===================================================================================================*/
+
+/* remove all spaces from a cstring */
+void nl2space(char* string) {
+	while (*string != '\0') {
+		if (*string == '\n') {
+			*string = ' ';
+			++string;
+		} else {
+			++string;
+		}
+	}
+}
+
+/* adds the current working directory to the path so that we can find our
+   custom executables */
+int updateWD() {
+    char cwd[FILENAME_MAX];
+    const char* path = getenv("PATH");
+    int size;
+    char* newPath;
+
+    if (! getcwd(cwd, sizeof(cwd))) {
+        perror("getcwd");
+        return 0;
+    }
+    if (! path)
+        return 0;
+
+    size = sizeof(path) + sizeof(cwd) + 10;
+    newPath = malloc(size);
+
+    sprintf(newPath, "%s:%s", path, cwd);
+    setenv("PATH", newPath, 1);
+    free (newPath);
+
+    return 1;
+}
+
+/*
+ * Takes a char* as an argument and allocates a character
+ * array with the text of the prompt.  The string must be
+ * freed by the user.
+ */
+char* getPrompt(char** prompt) {
+	char cwd[FILENAME_MAX] = "";
+	if (!getcwd(cwd, sizeof(cwd)))
+		strcpy(cwd, "?");
+
+	*prompt = malloc(sizeof(char) * (strlen(cwd) + 3));
+	sprintf(*prompt, "%s$ ", cwd);
+
+	return *prompt;
+}
+
+/*
+ * retrieves a command from the user
+ */
+char* getCommand(char** command) {
+    char* prompt;
+    *command = readline(getPrompt(&prompt));
+    free(prompt);
+
+    /* if non-empty add to history */
+    if (command &&  *command)
+        add_history(*command);
+
+    return *command;
+}
+
+int countDelims(char* string, char* delim) {
+	size_t count = 0;
+	for (char* cursor = delim; *delim; ++delim) {
+		while (*string) {
+			if (*string == *cursor)
+				count++;
+			string++;
+		}
+	}
+	return count;
+}
+
+/*
+ * Tokenize the command string
+ */
+void splitLine(char* line, char** result, const char delim) {
+	char delims[2] = { 0 };
+	delims[0] = delim;
+
+    if (result) {
+        size_t idx = 0;
+        char* token = strtok(line, delims);
+
+        while (token) {
+            *(result + idx++) = strdup(token);
+            token = strtok(0, " ");
+        }
+        *(result + idx) = 0;          /* add terminating null */
+    }
+}
+
+void exec(char** command, char** result) {
+	// backup stdin and stdout
+	int real_stdin  = dup(STDIN);
+	int real_stdout = dup(STDOUT);
+
+	// pipe to capture results
+	int pfd[2];
+	pid_t cpid;
+
+	if (pipe(pfd) == -1) {
+		perror("exec: pipe");
+		return;
+	}
+
+	cpid = fork();
+	if (cpid == -1) {
+		perror("exec: fork");
+		return;
+	}
+
+	if (cpid == 0) {
+		dup2(pfd[1], 1);
+		close(pfd[0]);
+		close(pfd[1]);
+		execvp(*command, command);
+	}
+
+	if (cpid > 0) {
+		// wait for child and restore stdout
+		waitpid(cpid, 0, 0);
+		dup2(real_stdout, 1);
+
+		// create the results buffer
+		*result = malloc(sizeof(char) * (LARGE_BUF + 1));
+		char test[2];
+
+
+		int bytesRead = read(pfd[0], *result, LARGE_BUF);
+		if (bytesRead == LARGE_BUF) {
+			fprintf(stderr, "Pipe overflow\n");
+			return;
+		}
+		(*result)[bytesRead] = '\0';
+
+		nl2space(*result);
+	}
+
+	// close backup file descriptors
+	close(real_stdin);
+	close(real_stdout);
+}
+
+void processPipes(char* lineRead) {
+	char** pipes = malloc(sizeof(char) * (countDelims(lineRead, "|") + 1));
+	splitLine(lineRead, pipes, '|');
+
+	// resolve all the subshells
+	for (int i = 0; pipes && *(pipes + i); ++i) {
+printf("%s ", *(pipes + i));
+		int last = (*(pipes + i + 1)) ? 0 : 1;
+		*(pipes + i) = resolveSubshells(*(pipes + i));
+
+printf("%s ", *(pipes + i));
+
+	}
+	printf("\n");
+}
+
+char* resolveSubshells(const char* line) {
+	size_t originSize = strlen(line);
+	char* newCommand = malloc(sizeof(char) * (originSize + 1));
+	strcpy(newCommand, line);
+
+	char* cursor;
+	while(cursor = strstr(newCommand, "$(")) {
+		char* subcmd = cursor + 2;
+		*cursor = '\0';
+
+		if(!(cursor = strstr(subcmd, ")"))) {
+			fprintf(stderr, "error: non-terminated subshell");
+			return 0;
+		}
+
+		cursor += 1;
+		*(cursor - 1) = '\0';
+
+		size_t subSize = strlen(subcmd);
+
+		char** parsed = malloc(sizeof(char) * (countDelims(subcmd, WHITESPACE) + 1));
+		splitLine(subcmd, parsed, ' ');
+		char*  subshellDump = 0;
+
+		exec(parsed, &subshellDump);
+
+		size_t tempSize = (originSize - subSize + strlen(subshellDump));
+		char* temp = malloc(sizeof(char) * (tempSize + 1));
+		sprintf(temp, "%s%s%s", newCommand, subshellDump, cursor);
+
+		free(newCommand);
+		newCommand = temp;
+	}
+}
+
+int main(int argc, char** argv) {
+	if (! updateWD()) {
+		fprintf(stderr, "Error adding CWD to the path");
+		return 127;
+	}
+
+	// handle a one-off execution
+	if (argc > 1) {
+		char* result = 0;
+		exec(argv+1, &result);
+
+		if (result) {
+			fprintf(stdout, "%s\n", result);
+			exit(EXIT_SUCCESS);
+		}
+		else
+			exit(EXIT_FAILURE);
+	}
+
+	while(1) {            // main terminal loop
+		char* lineRead;
+		getCommand(&lineRead);
+		processPipes(lineRead);
+
+
+		free(lineRead);
+	}
+
+
+
+}
+
+
+/* ====================================================================================*/
+
+/*
+int oldmain(int argc, char ** argv) {
+    // backup original stdin and stdout
     int real_stdin  = dup(STDIN);
     int real_stdout = dup(STDOUT);
 
-    /* set the working directory */
+    // set the working directory
     if (! updateWD()) {
         printf("Error adding CWD to the path");
         return 1;
@@ -275,10 +446,10 @@ int main(int argc, char ** argv) {
 
 
 			char** command1 = malloc(sizeof(char)*(countWords(line) + 1));
-            parseLine(line, command1);
+            splitLine(line, command1, WHITESPACE);
 
 			char** command2 = malloc(sizeof(char)*(countWords(cursor) + 1));
-            parseLine(cursor, command2);
+            splitLine(cursor, command2, WHITESPACE);
             if (! execPipe(command1, command2))
                 printf("Pipe failed\n");
             free(command1);
@@ -286,7 +457,7 @@ int main(int argc, char ** argv) {
             continue;
         }
 
-        /* check for output redirection */
+        // check for output redirection
         if (cursor = strstr(line, ">")) {
             char* end = cursor;
             end += (*(cursor+1) == ' ') ? 2 : 1;
@@ -296,7 +467,7 @@ int main(int argc, char ** argv) {
             memmove(cursor, end, strlen(end)+1);
         }
 
-        /* check for input redirection */
+        // check for input redirection
         if (cursor = strstr(line, "<")) {
             char* end = cursor;
             end += (*(cursor+1) == ' ') ? 2 : 1;
@@ -306,15 +477,15 @@ int main(int argc, char ** argv) {
             memmove(cursor, end, strlen(end)+1);
         }
 
-        /* if either redirection exists */
+        // if either redirection exists
         if (strlen(input) || strlen(output)) {
             char** command = malloc(sizeof(char) * countWords(line));
-            parseLine(line, command);
+            splitLine(line, command, WHITESPACE);
             execRedirect(command, input, output);
             continue;
         }
 
-        /* check for subshell */
+        // check for subshell
         if (cursor = strstr(line, "$(")) {
             char* subcmd = cursor+2;
             *cursor = '\0';
@@ -347,17 +518,14 @@ int main(int argc, char ** argv) {
                 close(pfd[0]);
                 close(pfd[1]);
                 char** command = malloc(sizeof(char) * countWords(subcmd));
-int size = countWords(subcmd);
-                parseLine(subcmd, command);
-for( int i = 0; i < size; ++i)
-	fprintf(stderr, "%s ", *command);
-fprintf(stderr, "\n\n");
-fflush(stderr);
-exit(EXIT_SUCCESS);
-                //execvp(*command, command);
+                splitLine(subcmd, command);
+                execvp(*command, command);
             } else {
 				close(pfd[1]);
+				waitpid(cpid, NULL, 0);
 			}
+
+			dup2(real_stdout, 1);
 
 			char* subshellDump = malloc(sizeof(char) * LARGE_BUF);
 			char  test[2];
@@ -382,30 +550,32 @@ exit(EXIT_SUCCESS);
 				sprintf(newCmd, "%s %s %s", line, subshellDump, cursor);
 
 				char** command = malloc(sizeof(char) * countWords(newCmd));
-				parseLine(newCmd, command);
+				splitLine(newCmd, command);
 				execvp(*command, command);
+            } else {
+				waitpid(cpid, NULL, 0);
 			}
 
             continue;
         }
 
         pid_t childPID;
-        /* attempt to fork the process */
+        // attempt to fork the process
         if ((childPID = fork()) == -1){
             perror("fork");
-        } else if (childPID == 0) {   /* this is the child */
+        } else if (childPID == 0) {   // this is the child
             char** command = malloc(sizeof(char) * countWords(line));
-            parseLine(line, command);
+            splitLine(line, command, WHITESPACE);
             execvp(*command, command);
 
-            /* if child returns then print out the error */
+            // if child returns then print out the error
             perror("exec");
-        } else {               /* this is the parent */
-            /* TODO: do we need to customize handling of errors? */
+        } else {               // this is the parent
+            // TODO: do we need to customize handling of errors?
             waitpid(childPID, NULL, 0);
         }
 
-		/* close the backups */
+		// close the backups
 		close(real_stdin);
 		close(real_stdout);
 
@@ -413,3 +583,5 @@ exit(EXIT_SUCCESS);
 
     }
 }
+
+*/
