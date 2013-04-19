@@ -6,16 +6,16 @@ LS_FOLD     = myls_src
 .PHONY: clean run mysh mycat mycp myls
 
 mysh:
-	@$(MAKE) -C $(SHELL_FOLD)
+	$(MAKE) -C $(SHELL_FOLD)
 
 mycat:
-	@$(MAKE) -C $(CAT_FOLD)
+	$(MAKE) -C $(CAT_FOLD)
 
 mycd:
-	@$(MAKE) -C $(CP_FOLD)
+	$(MAKE) -C $(CP_FOLD)
 
 myls:
-	@$(MAKE) -C $(LS_FOLD)
+	$(MAKE) -C $(LS_FOLD)
 
 clean:
 	rm -f mysh mycat mycp myls

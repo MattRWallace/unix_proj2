@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #define UMASK      0600
 #define STDIN      0
@@ -17,96 +18,18 @@
 
 // prototypes
 
+char* trim(char*);
 void nl2space(char*);
 int updateWD();
 char* getPrompt(char**);
 char* getCommand(char**);
 int countDelims(char*, char*);
 void splitLine(char*, char**, const char);
-void exec(char**, char**);
-void processPipes(char*);
+int exec(char**, char**, char*);
+int processPipes(char*);
 char* resolveSubshells(const char*);
 
 /*
-// count the spaces in the command
-int countWords(char* string) {
-	int count = 0;
-    while (*string) {
-        if ( ' ' == *string)
-            count++;
-        string++;
-    }
-	return count;
-}
-
-// trim whitepsace from string
-char* trim(char* string) {
-    // bail if NULL
-    if (! string)
-        return NULL;
-
-    while(isspace(*string))
-        string++;
-
-    if(*string != 0) {
-        char* end = string + strlen(string) - 1;
-        while (end > string && isspace(*end))
-            end--;
-        *(end+1) = '\0';
-    }
-
-    return string;
-}
-
-int execPipe(char** command1, char** command2) {
-    int pfd[2];
-    pid_t cpid1, cpid2;
-
-    if (pipe(pfd) == -1) {
-        perror("pipe");
-        return -1;
-    }
-
-    cpid1 = fork();
-    if (cpid1 == -1) {
-        perror("fork");
-        return -1;
-    }
-
-    if (cpid1 == 0) {
-        dup2(pfd[1], 1);
-        close(pfd[0]);
-        close(pfd[1]);
-        execvp(*command1, command1);
-    } else {
-        close(pfd[1]);
-    }
-
-    cpid2 = fork();
-    if (cpid2 == -1) {
-        perror("fork");
-        return -1;
-    }
-
-    if (cpid2 == 0) {
-        dup2(pfd[0], 0);
-        close(pfd[0]);
-        close(pfd[1]);
-        execvp(*command2, command2);
-    }
-
-    // wait for processes to exit
-    //TODO: waitpid(cpid1, NULL, 0);
-    waitpid(cpid2, NULL, 0);
-
-    // close the extra file descriptors
-    close(pfd[0]);
-    close(pfd[1]);
-
-    // return true
-    return 1;
-}
-
 int execRedirect(char** command, char* input, char* output) {
     // file descriptors for input and output files
     int infile, outfile;
@@ -169,7 +92,25 @@ int execRedirect(char** command, char* input, char* output) {
 }
 */
 
-/* ===================================================================================================*/
+
+// trim whitepsace from string
+char* trim(char* string) {
+    // bail if NULL
+    if (! string)
+        return NULL;
+
+    while(isspace(*string))
+        string++;
+
+    if(*string != 0) {
+        char* end = string + strlen(string) - 1;
+        while (end > string && isspace(*end))
+            end--;
+        *(end+1) = '\0';
+    }
+
+    return string;
+}
 
 /* remove all spaces from a cstring */
 void nl2space(char* string) {
@@ -204,6 +145,7 @@ int updateWD() {
     sprintf(newPath, "%s:%s", path, cwd);
     setenv("PATH", newPath, 1);
     free (newPath);
+	newPath = 0;
 
     return 1;
 }
@@ -231,6 +173,7 @@ char* getCommand(char** command) {
     char* prompt;
     *command = readline(getPrompt(&prompt));
     free(prompt);
+	prompt = 0;
 
     /* if non-empty add to history */
     if (command &&  *command)
@@ -263,58 +206,96 @@ void splitLine(char* line, char** result, const char delim) {
         char* token = strtok(line, delims);
 
         while (token) {
-            *(result + idx++) = strdup(token);
-            token = strtok(0, " ");
+			result[idx++] = strdup(token);
+            token = strtok(0, delims);
         }
-        *(result + idx) = 0;          /* add terminating null */
+		result[idx] = 0;              /* add terminating null */
     }
 }
 
-void exec(char** command, char** result) {
+int exec(char** command, char** result, char* inputStr) {
 	// backup stdin and stdout
 	int real_stdin  = dup(STDIN);
 	int real_stdout = dup(STDOUT);
 
 	// pipe to capture results
 	int pfd[2];
+	int pfd2[2];
+	int status[2];  // communication between child and parent
+	int err;
 	pid_t cpid;
 
 	if (pipe(pfd) == -1) {
 		perror("exec: pipe");
-		return;
+		return -1;
+	}
+
+	if (pipe(status) == -1) {
+		perror("exec: pipe");
+		return -1;
+	}
+	if (fcntl(status[1], F_SETFD, fcntl(status[1], F_GETFD) | FD_CLOEXEC)) {
+		perror("fcntl");
+		return -1;
 	}
 
 	cpid = fork();
 	if (cpid == -1) {
 		perror("exec: fork");
-		return;
+		return -1;
 	}
 
 	if (cpid == 0) {
-		dup2(pfd[1], 1);
+		// If input provided, write to secondary pipe and connect to main pipe
+		if (inputStr) {
+			if (pipe(pfd2) == -1) {
+				perror("exec: pipe2");
+				return -1;
+			}
+			write(pfd2[1], inputStr, strlen(inputStr));
+			dup2(pfd2[0], STDIN);
+		} else {
+			close(pfd2[0]);
+		}
+		close(pfd2[1]);
+		dup2(pfd[1], STDOUT);
 		close(pfd[0]);
 		close(pfd[1]);
+		close(status[0]);
 		execvp(*command, command);
+
+		// exec failed
+		fprintf(stderr, "exec: failed to execute \"%s\"\n", *command);
+		write(status[1], &errno, sizeof(int));
+		dup2(real_stdin, STDIN);
+		dup2(real_stdout, STDOUT);
+		_exit(-1);
 	}
 
 	if (cpid > 0) {
+
+		// check for a failure in the child
+		close(status[1]);
+		while (read(status[0], &err, sizeof(errno)) > 0) {
+			return -1;
+		}
+
 		// wait for child and restore stdout
-		waitpid(cpid, 0, 0);
+		int status = waitpid(cpid, 0, 0);
 		dup2(real_stdout, 1);
 
 		// create the results buffer
 		*result = malloc(sizeof(char) * (LARGE_BUF + 1));
 		char test[2];
 
-
 		int bytesRead = read(pfd[0], *result, LARGE_BUF);
 		if (bytesRead == LARGE_BUF) {
 			fprintf(stderr, "Pipe overflow\n");
-			return;
+			return -1;
 		}
 		(*result)[bytesRead] = '\0';
 
-		nl2space(*result);
+		//nl2space(*result);
 	}
 
 	// close backup file descriptors
@@ -322,20 +303,50 @@ void exec(char** command, char** result) {
 	close(real_stdout);
 }
 
-void processPipes(char* lineRead) {
+void getRedirections(char* command) {
+	char *incur, *outcur;
+	char input[FILENAME_MAX]  = "stdin";
+	char output[FILENAME_MAX] = "stdout";
+
+	// while some redirection still exists
+	while ((incur = strstr(command, "<")) || (outcur = strstr(command, ">"))) {
+
+
+	}
+}
+
+int processPipes(char* lineRead) {
 	char** pipes = malloc(sizeof(char) * (countDelims(lineRead, "|") + 1));
 	splitLine(lineRead, pipes, '|');
 
-	// resolve all the subshells
-	for (int i = 0; pipes && *(pipes + i); ++i) {
-printf("%s ", *(pipes + i));
-		int last = (*(pipes + i + 1)) ? 0 : 1;
-		*(pipes + i) = resolveSubshells(*(pipes + i));
+	char* last   = 0;
+	int   status = 0;
 
-printf("%s ", *(pipes + i));
+	for (int i = 0; pipes && pipes[i]; ++i) {
+		pipes[i]       = resolveSubshells(pipes[i]);
+		// TODO: handle redirections here
+		char** command = malloc(sizeof(char) * (countDelims(pipes[i], " ") + 1));
+		splitLine(pipes[i], command, ' ');
 
+		// check for an exit
+		if (strcmp("exit", trim(pipes[i])) == 0)
+			exit(EXIT_SUCCESS);
+
+		if (i == 0) {              // first command
+			status = exec(command, &last, 0);
+		}
+		else {                     // not first command
+			char* temp = 0;
+			status = exec(command, &temp, last);
+			free(last);
+			last = temp;
+		}
+		if (status == -1)
+			break;
+		if (! pipes[i+1])          // last command
+			printf("%s\n", last);
 	}
-	printf("\n");
+	free(last);
 }
 
 char* resolveSubshells(const char* line) {
@@ -362,7 +373,7 @@ char* resolveSubshells(const char* line) {
 		splitLine(subcmd, parsed, ' ');
 		char*  subshellDump = 0;
 
-		exec(parsed, &subshellDump);
+		exec(parsed, &subshellDump, 0);
 
 		size_t tempSize = (originSize - subSize + strlen(subshellDump));
 		char* temp = malloc(sizeof(char) * (tempSize + 1));
@@ -371,6 +382,8 @@ char* resolveSubshells(const char* line) {
 		free(newCommand);
 		newCommand = temp;
 	}
+
+	return newCommand;
 }
 
 int main(int argc, char** argv) {
@@ -382,7 +395,7 @@ int main(int argc, char** argv) {
 	// handle a one-off execution
 	if (argc > 1) {
 		char* result = 0;
-		exec(argv+1, &result);
+		exec(argv+1, &result, 0);
 
 		if (result) {
 			fprintf(stdout, "%s\n", result);
@@ -399,189 +412,6 @@ int main(int argc, char** argv) {
 
 
 		free(lineRead);
+		lineRead = 0;
 	}
-
-
-
 }
-
-
-/* ====================================================================================*/
-
-/*
-int oldmain(int argc, char ** argv) {
-    // backup original stdin and stdout
-    int real_stdin  = dup(STDIN);
-    int real_stdout = dup(STDOUT);
-
-    // set the working directory
-    if (! updateWD()) {
-        printf("Error adding CWD to the path");
-        return 1;
-    }
-
-    while (1) {
-        char* lineRead;
-        char* line;
-        char* cursor;
-        char  input[FILENAME_MAX]  = { 0 };
-        char  output[FILENAME_MAX] = { 0 };
-
-        // get the line
-        line = trim(getCommand(&lineRead));
-
-        if (! line)   // blank command, do nothing
-            continue;
-
-        // command 'exit' exits the shell
-        if (strcmp("exit", line) == 0) {
-            free(lineRead);
-            exit(EXIT_SUCCESS);
-        }
-
-        // first check for a pipe
-        if (cursor = strstr(line, "|")) {
-            cursor++;
-            *(cursor - 1) = 0;
-
-
-			char** command1 = malloc(sizeof(char)*(countWords(line) + 1));
-            splitLine(line, command1, WHITESPACE);
-
-			char** command2 = malloc(sizeof(char)*(countWords(cursor) + 1));
-            splitLine(cursor, command2, WHITESPACE);
-            if (! execPipe(command1, command2))
-                printf("Pipe failed\n");
-            free(command1);
-            free(command2);
-            continue;
-        }
-
-        // check for output redirection
-        if (cursor = strstr(line, ">")) {
-            char* end = cursor;
-            end += (*(cursor+1) == ' ') ? 2 : 1;
-            sscanf(end, "%s", output);
-            end += strlen(output);
-
-            memmove(cursor, end, strlen(end)+1);
-        }
-
-        // check for input redirection
-        if (cursor = strstr(line, "<")) {
-            char* end = cursor;
-            end += (*(cursor+1) == ' ') ? 2 : 1;
-            sscanf(end, "%s", input);
-            end += strlen(input);
-
-            memmove(cursor, end, strlen(end)+1);
-        }
-
-        // if either redirection exists
-        if (strlen(input) || strlen(output)) {
-            char** command = malloc(sizeof(char) * countWords(line));
-            splitLine(line, command, WHITESPACE);
-            execRedirect(command, input, output);
-            continue;
-        }
-
-        // check for subshell
-        if (cursor = strstr(line, "$(")) {
-            char* subcmd = cursor+2;
-            *cursor = '\0';
-
-            cursor = strstr(subcmd, ")");
-            if (! cursor) {
-                fprintf(stderr, "error: no termination of subshell\n");
-                continue;
-            }
-
-            cursor += 1;
-            *(cursor - 1) = '\0';
-
-            int pfd[2];
-            pid_t cpid;
-
-            if(pipe(pfd) == -1) {
-                perror("pipe (subshell)");
-                continue;
-            }
-
-            cpid = fork();
-            if (cpid == -1) {
-                perror("fork (subshell)");
-                continue;
-            }
-
-			if (cpid == 0) {    // child process
-                dup2(pfd[1], 1);
-                close(pfd[0]);
-                close(pfd[1]);
-                char** command = malloc(sizeof(char) * countWords(subcmd));
-                splitLine(subcmd, command);
-                execvp(*command, command);
-            } else {
-				close(pfd[1]);
-				waitpid(cpid, NULL, 0);
-			}
-
-			dup2(real_stdout, 1);
-
-			char* subshellDump = malloc(sizeof(char) * LARGE_BUF);
-			char  test[2];
-
-			read(pfd[0], subshellDump, LARGE_BUF - 1);
-			if (read(pfd[0], test, 1) > 0) {
-				fprintf(stderr, "subshell overflow\n");
-				continue;
-			}
-			replaceSpaces(subshellDump);
-
-			cpid = fork();
-            if (cpid == -1) {
-                perror("fork (subshell)");
-                continue;
-            }
-
-			if (cpid == 0) {
-
-				int size = strlen(line) + strlen(subshellDump) + strlen(cursor) + 3;
-				char* newCmd = malloc(sizeof(char) * size);
-				sprintf(newCmd, "%s %s %s", line, subshellDump, cursor);
-
-				char** command = malloc(sizeof(char) * countWords(newCmd));
-				splitLine(newCmd, command);
-				execvp(*command, command);
-            } else {
-				waitpid(cpid, NULL, 0);
-			}
-
-            continue;
-        }
-
-        pid_t childPID;
-        // attempt to fork the process
-        if ((childPID = fork()) == -1){
-            perror("fork");
-        } else if (childPID == 0) {   // this is the child
-            char** command = malloc(sizeof(char) * countWords(line));
-            splitLine(line, command, WHITESPACE);
-            execvp(*command, command);
-
-            // if child returns then print out the error
-            perror("exec");
-        } else {               // this is the parent
-            // TODO: do we need to customize handling of errors?
-            waitpid(childPID, NULL, 0);
-        }
-
-		// close the backups
-		close(real_stdin);
-		close(real_stdout);
-
-		free(lineRead);
-
-    }
-}
-
-*/
