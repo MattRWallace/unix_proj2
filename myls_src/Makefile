@@ -1,18 +1,19 @@
 CC          = gcc
 LDFLAGS     =
 CFLAGS      = -Wall -pedantic -g
-DEPS        =  
-OBJ         = myls.o
+DEPS        = myls.h
+OBJ         = myls.o print.o util.o
 
 EXEC        = myls
 
-.PHONY: clean
 
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS) $(LDFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 ../$(EXEC): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS)
+
+.PHONY: clean
 
 clean:
 	rm -f *.o
