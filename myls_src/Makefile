@@ -3,6 +3,9 @@ LDFLAGS     =
 CFLAGS      = -Wall -pedantic -g
 DEPS        = myls.h
 OBJ         = myls.o print.o util.o
+CFLAGS      = -pedantic -g -std=c99
+DEPS        =  
+OBJ         = myls.o
 
 EXEC        = myls
 

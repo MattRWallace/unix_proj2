@@ -1,10 +1,10 @@
 CC          = gcc
 LDFLAGS     = 
-CFLAGS      = -Wall -pedantic -g
+CFLAGS      = -pedantic -g -std=c99
 DEPS        =  
-OBJ         = mycd.o
+OBJ         = mycp.o
 
-EXEC        = mycd
+EXEC        = mycp
 
 .PHONY: clean
 
