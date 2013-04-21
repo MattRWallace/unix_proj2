@@ -1,4 +1,7 @@
+#define _BSD_SOURCE
+
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 
 #include <stdlib.h>
@@ -61,12 +64,12 @@ static void display(char *argv){
     char *path;
     struct dirent **ent;
     struct stat stat;
-    
+
     lstat(argv, &stat);
     if(stat.st_mode & S_IFDIR){
         if((entries = scandir(argv, &ent, filter, alphasort)) == -1)
             err(EXIT_FAILURE, NULL);
-        
+
         len = strlen(argv);
         if(argv[len] != '/'){
             path = (char *) malloc(len + 1);
@@ -80,7 +83,7 @@ static void display(char *argv){
             path = argv;
         }
     }
-    
+
     if(column_flag){
         for(i = 0; i < entries; ++i){
             if((len=strlen(ent[i]->d_name)) > max_name_len)

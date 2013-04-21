@@ -3,5 +3,8 @@
 .*.*~
 a.out
 mysh
+myls
+mycp
+mycat
 *.o
 *.swp
