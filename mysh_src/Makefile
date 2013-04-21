@@ -1,7 +1,7 @@
 CC          = gcc
 LDFLAGS     = -lreadline
 CFLAGS      = -pedantic -g -std=c99
-DEPS        =  
+DEPS        = strings.h shell.h
 OBJ         = mysh.o
 
 EXEC        = mysh
