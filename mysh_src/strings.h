@@ -43,19 +43,17 @@ int countDelims(char* string, char* delim) {
 /*
  * Tokenize the command string
  */
-void splitLine(char* line, char** result, const char delim) {
-	char delims[2] = { 0 };
-	delims[0] = delim;
-
-    if (result) {
+void splitLine(char* line, char*** result, char* delims) {
+	*result = malloc(sizeof(char*) * (countDelims(line, delims) + 2));
+    if (*result) {
         size_t idx = 0;
         char* token = strtok(line, delims);
 
         while (token) {
-			result[idx++] = strdup(token);
+			(*result)[idx++] = strdup(token);
             token = strtok(0, delims);
         }
-		result[idx] = 0;              /* add terminating null */
+		(*result)[idx] = 0;              /* add terminating null */
     }
 }
 

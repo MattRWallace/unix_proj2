@@ -87,8 +87,8 @@ int exec(char* comm, char** result, char* inputStr) {
 	char* input=0, *output=0, *error = 0;
 	getRedirections(comm, &input, &output, &error);
 
-	char** command = malloc(sizeof(char) * (countDelims(comm, " ") + 1));
-	splitLine(comm, command, ' ');
+	char** command;
+	splitLine(comm, &command, " ");
 
 	// pipe to capture results
 	int pfd[2];
@@ -133,7 +133,7 @@ int exec(char* comm, char** result, char* inputStr) {
 			}
 
 			if (input) {
-				if ((inputFd = open(input, O_RDONLY) == -1)) {
+				if ((inputFd = open(input, O_RDONLY)) == -1) {
 					perror("exec: input redirect");
 				}
 				// if incoming pipe, then tag on to the end of it
@@ -169,8 +169,7 @@ int exec(char* comm, char** result, char* inputStr) {
 		execvp(*command, command);
 
 		// exec failed
-		perror("perror");
-		fprintf(stderr, "\nexec: failed to execute \"%s\"\n", comm);
+		fprintf(stderr, "exec: failed to execute \"%s\"\n", comm);
 
 		// cleanup
 		dup2(real_stdin, STDIN);
@@ -217,7 +216,8 @@ int exec(char* comm, char** result, char* inputStr) {
 			returnFlag = 1;
 		}
 
-		//nl2space(*result);
+		if (inputStr)
+			nl2space(*result);
 
 		return returnFlag;
 	}
@@ -296,8 +296,8 @@ void getRedirections(char* command, char **input, char **output, char **error) {
 }
 
 int processPipes(char* lineRead) {
-	char** pipes = malloc(sizeof(char) * (countDelims(lineRead, "|") + 1));
-	splitLine(lineRead, pipes, '|');
+	char** pipes;
+	splitLine(lineRead, &pipes, "|");
 
 	char* last   = 0;
 	int   status = 0;
@@ -322,8 +322,11 @@ int processPipes(char* lineRead) {
 			fprintf(stderr, "command not found: %s\n", pipes[i]);
 			break;
 		}
-		if (! pipes[i+1] && status == 0)          // last command
+		if (! pipes[i+1] && status == 0) {        // last command
 			printf("%s", last);
+			if (last[strlen(last)] != '\n')
+				printf("\n");
+		}
 	}
 	free(last);
 }
