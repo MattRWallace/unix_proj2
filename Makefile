@@ -5,7 +5,7 @@ LS_FOLD     = myls_src
 
 .PHONY: clean run mysh mycat mycp myls
 
-all: mysh mycat mycd myls
+all: mysh myls mycat mycd
 
 mysh:
 	$(MAKE) -C $(SHELL_FOLD)

@@ -1,5 +1,7 @@
 #define STDIN              0
 #define STDOUT             1
+#define STDERR             2
+#define UMASK              0600
 #define LARGE_BUF          4096
 
 int updateWD();
@@ -73,26 +75,25 @@ char* getCommand(char** command) {
 }
 
 int exec(char* comm, char** result, char* inputStr) {
+	int returnFlag = 0;  // hacky solution to pipe after an output redirect
+	                     // but not print results after and output
+
 	// backup stdin and stdout
 	int real_stdin  = dup(STDIN);
 	int real_stdout = dup(STDOUT);
+	int real_stderr = dup(STDERR);
 
 	// get reirections for the command
 	char* input=0, *output=0, *error = 0;
 	getRedirections(comm, &input, &output, &error);
-fprintf(stderr, "\tinput: %s\n\toutput: %s\n\terror: %s\n", input, output, error);
-
-	// TODO: perform the actual redirections, the three strings must be freed also
 
 	char** command = malloc(sizeof(char) * (countDelims(comm, " ") + 1));
 	splitLine(comm, command, ' ');
-
 
 	// pipe to capture results
 	int pfd[2];
 	int pfd2[2];
 	int status;
-	int err;
 	pid_t cpid;
 
 	if (pipe(pfd) == -1) {
@@ -107,28 +108,86 @@ fprintf(stderr, "\tinput: %s\n\toutput: %s\n\terror: %s\n", input, output, error
 	}
 
 	if (cpid == 0) {
-		// If input provided, write to secondary pipe and connect to main pipe
-		if (inputStr) {
+
+		int inputFd = 0, outputFd = 0, errorFd = 0;
+
+		// handle stderr
+		if (error) {
+			if ((errorFd = open(error, O_RDWR | O_CREAT, UMASK)) == -1) {
+				perror("exec: stderr redirect");
+			}
+			dup2(errorFd, STDERR);
+		}
+
+		// Handle input
+		if (inputStr || input) {
 			if (pipe(pfd2) == -1) {
 				perror("exec: pipe2");
 				return -1;
 			}
-			write(pfd2[1], inputStr, strlen(inputStr));
-			dup2(pfd2[0], STDIN);
-		} else {
+
+			// Incoming pipe, write to secondary pipe and connect to main pipe
+			if (inputStr) {
+				write(pfd2[1], inputStr, strlen(inputStr));    // TODO: add error checking to write
+				dup2(pfd2[0], STDIN);
+			}
+
+			if (input) {
+				if ((inputFd = open(input, O_RDONLY) == -1)) {
+					perror("exec: input redirect");
+				}
+				// if incoming pipe, then tag on to the end of it
+				if (inputStr) {
+					int numRead = 0;
+					char character[2];
+					while ((numRead = read(inputFd, character, 1)) > 0)    //TODO: add error checking to read/write
+						write(pfd2[1], character, 1);
+				}
+				// otherwise, just hook to stdin
+				else
+					dup2(inputFd, STDIN);
+			}
+
+			// close the input pipe
 			close(pfd2[0]);
-		}
-		close(pfd2[1]);
+			close(pfd2[1]);
+
+		} /*else {
+			close(pfd[0]);
+		}*/
+
+		// free redirect strings if they were allocated
+		if (input)
+			free(input);
+		if (error)
+			free(error);
+
 		dup2(pfd[1], STDOUT);
 		close(pfd[0]);
 		close(pfd[1]);
-		//close(status[0]);
-		execvp(*command, command);
 
-		// exec failed, cleanup
-		fprintf(stderr, "exec: failed to execute \"%s\"\n", *command);
+const char* test = getenv("PATH");
+fprintf(stderr, "actual: %s\n", test);
+extern char** environ;
+
+		execvpe(*command, command, environ);
+
+
+		// exec failed, handle possible stderr redirect
+		if (error) {
+			int fd;
+			if ((fd = open(error, O_WRONLY | O_CREAT | O_TRUNC, UMASK)) == -1) {
+				perror("exec: stderr redirect");
+				fd = STDERR;
+			}
+			dup2(fd, STDERR);
+			fprintf(stderr, "exec: failed to execute \"%s\"\n", *command);
+		}
+
+		// cleanup
 		dup2(real_stdin, STDIN);
 		dup2(real_stdout, STDOUT);
+		dup2(real_stderr, STDERR);
 
 		// return -1, _exit used instead of exit to ensure child does no
 		// cleanup that should be done by the parent
@@ -136,17 +195,19 @@ fprintf(stderr, "\tinput: %s\n\toutput: %s\n\terror: %s\n", input, output, error
 	}
 
 	if (cpid > 0) {
-		// wait for child and restore stdout
-		waitpid(cpid, &status, 0);
-		dup2(real_stdout, 1);
+		// close the write end of the pipe
+		close(pfd[1]);
 
-		// return if child failed
+		// wait for child and return in child failed
+		waitpid(cpid, &status, 0);
 		if (status != 0)
 			return -1;
 
+		// restore stdout
+		dup2(real_stdout, 1);
+
 		// create the results buffer
 		*result = malloc(sizeof(char) * (LARGE_BUF + 1));
-		char test[2];
 
 		int bytesRead = read(pfd[0], *result, LARGE_BUF);
 		if (bytesRead == LARGE_BUF) {
@@ -155,12 +216,27 @@ fprintf(stderr, "\tinput: %s\n\toutput: %s\n\terror: %s\n", input, output, error
 		}
 		(*result)[bytesRead] = '\0';
 
+		if (output) {
+			int fd;
+			if ((fd = open(output, O_WRONLY | O_CREAT | O_TRUNC, UMASK)) == -1) {
+				perror("exec: stdout redirect");
+				fd = STDOUT;
+			}
+			write(fd, *result, strlen(*result));        // TODO: error checking
+
+			free(output);
+			returnFlag = 1;
+		}
+
 		//nl2space(*result);
+
+		return returnFlag;
 	}
 
 	// close backup file descriptors
 	close(real_stdin);
 	close(real_stdout);
+	close(real_stderr);
 }
 
 void getRedirections(char* command, char **input, char **output, char **error) {
@@ -253,10 +329,12 @@ int processPipes(char* lineRead) {
 			free(last);
 			last = temp;
 		}
-		if (status == -1)
+		if (status == -1) {
+			fprintf(stderr, "command not found: %s\n", pipes[i]);
 			break;
-		if (! pipes[i+1])          // last command
-			printf("%s\n", last);
+		}
+		if (! pipes[i+1] && status == 0)          // last command
+			printf("%s", last);
 	}
 	free(last);
 }
