@@ -166,23 +166,11 @@ int exec(char* comm, char** result, char* inputStr) {
 		close(pfd[0]);
 		close(pfd[1]);
 
-const char* test = getenv("PATH");
-fprintf(stderr, "actual: %s\n", test);
-extern char** environ;
+		execvp(*command, command);
 
-		execvpe(*command, command, environ);
-
-
-		// exec failed, handle possible stderr redirect
-		if (error) {
-			int fd;
-			if ((fd = open(error, O_WRONLY | O_CREAT | O_TRUNC, UMASK)) == -1) {
-				perror("exec: stderr redirect");
-				fd = STDERR;
-			}
-			dup2(fd, STDERR);
-			fprintf(stderr, "exec: failed to execute \"%s\"\n", *command);
-		}
+		// exec failed
+		perror("perror");
+		fprintf(stderr, "\nexec: failed to execute \"%s\"\n", comm);
 
 		// cleanup
 		dup2(real_stdin, STDIN);
@@ -200,8 +188,9 @@ extern char** environ;
 
 		// wait for child and return in child failed
 		waitpid(cpid, &status, 0);
-		if (status != 0)
+		if (WIFEXITED(status) &&  WEXITSTATUS(status) != 0) {
 			return -1;
+		}
 
 		// restore stdout
 		dup2(real_stdout, 1);
