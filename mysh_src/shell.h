@@ -324,8 +324,10 @@ int processPipes(char* lineRead) {
 		}
 		if (! pipes[i+1] && status == 0) {        // last command
 			printf("%s", last);
+			/*
 			if (last[strlen(last)] != '\n')
 				printf("\n");
+				*/
 		}
 	}
 	free(last);
