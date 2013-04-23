@@ -92,7 +92,6 @@ static void traverse(char *argv[]){
         display(list);
         if(!(cur == NULL && errno != 0))
             (void)fts_set(fp, cur, FTS_SKIP);
-        //if(cur->fts_info == FTS_ERR || cur->fts_info == FTS_DNR){
         if(errno)
             err(1,"");
     }
