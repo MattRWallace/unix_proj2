@@ -8,13 +8,13 @@
 #include <pwd.h>
 #include <grp.h>
 #include <err.h>
+#include <dirent.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
-#include <dirent.h>
 #include <unistd.h>
 #include <termios.h>
-#include <locale.h>
 #include <math.h>
 #include <string.h>
 
@@ -90,6 +90,8 @@ static void traverse(char *argv[]){
             break;
         list = fts_children(fp,options);
         display(list);
+        if(errno)
+            err(1, "");
     }
 
 }
