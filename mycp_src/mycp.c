@@ -20,6 +20,7 @@ Return: The program will fail if a_file does not have read premission.  Also, if
 #include<string.h>
 #include<fcntl.h>
 #include<assert.h>
+#include <err.h>
 
 
 
@@ -111,23 +112,32 @@ int cpdir(DIR * a, char * Apath, char * Bpath){
 
 }
 
+void usage() {
+	printf("Usage mycp [-R] SOURCE DESTINATION\n");
+	printf("  -R          copy directories recursively\n");
+}
+
 
 int main(int argc, char *argv[]){
 
 	if(argc == 1){
-
+		usage();
+		/*
 		printf("cp must be called in form 'mycp.exe a_file b_file'\n");
-
 		printf("or form 'mycp.exe -R a_dir b_dir\n");
+		*/
 
 		return -1;
 	}
 
 	if(argc == 2){
 
-		printf("cp missing file argument, call in form 'mycp.exe a_file b_file'\n");
+		usage();
 
+		/*
+		printf("cp missing file argument, call in form 'mycp.exe a_file b_file'\n");
 		printf("or form 'mycp.exe -R a_dir b_dir\n");
+		*/
 
 		return -1;
 	}
@@ -157,7 +167,8 @@ int main(int argc, char *argv[]){
 
 		if(myFlag){
 
-			printf("overwrite '%s', y or n:\n", argv[2]);
+			printf("mycp: overwrite '%s'?", argv[2]);
+			//printf("overwrite '%s', y or n:\n", argv[2]);
 
 			scanf("%c", overwrite);
 
@@ -170,7 +181,7 @@ int main(int argc, char *argv[]){
 
 				char line[1100];
 
-				while(fgets(line, sizeof(line), fp1) > 0){
+				while(fgets(line, sizeof(line), fp1) != 0){
 
 					fputs(line, fp2);
 				}
@@ -184,25 +195,35 @@ int main(int argc, char *argv[]){
 			}
 			else{
 
+				err(-1, "cannot open %s for reading", argv[2]);
+
+				/*
 				printf("'%s' exists and does not allow write privledge\n", argv[2]);
 
 				return -1;
+				*/
 
 			}
 
 		}
 		else if(EACCES){
+			err(-1, "cannot open %s for reading", argv[2]);
 
+			/*
 			printf("'%s' does not have read privledge\n", argv[1]);
 
 			return -1;
+			*/
 
 		}
 		else{
+			err(-1, "error");
 
+			/*
 			printf("'%s'_file does not exist\n", argv[1]);
 
 			return -1;
+			*/
 		}
 	}
 
@@ -230,7 +251,7 @@ int main(int argc, char *argv[]){
 
 			strcat(Apath, "/");
 
-                        strcat(Bpath, "/");
+			strcat(Bpath, "/");
 
 			DIR * dp1;
 
@@ -249,23 +270,26 @@ int main(int argc, char *argv[]){
 
 				 if(ENOENT){    //dirb doesnt exist
 
-                                        mkdir(argv[3], S_IRWXG | S_IRWXO | S_IRWXU);
+					mkdir(argv[3], S_IRWXG | S_IRWXO | S_IRWXU);
 
-                                        dp2 = opendir(argv[3]);
+					dp2 = opendir(argv[3]);
 
-                                        int cp2 = cpdir(dp1, Apath, Bpath);
+					int cp2 = cpdir(dp1, Apath, Bpath);
 
-                                        if(cp2 != 0){ fputs ("cpdir failed", stderr); return -1;}
+					if(cp2 != 0){ fputs ("cpdir failed", stderr); return -1;}
 
 					return 0;
-                                }
+				}
 
 
 				if(EACCES){
+					err(-1, "error");
 
-					 printf("%s exists and does not have apropriate privledges\n", argv[3]);
+					/*
+					printf("%s exists and does not have apropriate privledges\n", argv[3]);
 
-                         	         return -1;
+					return -1;
+					*/
 
 
 				}
@@ -273,16 +297,21 @@ int main(int argc, char *argv[]){
 
 			else{
 
+				err(-1, "error");
+
+				/*
 				fputs ("a_directory could not be opened", stderr);
 
 				return -1;
+				*/
 
 			}
 
 		}
 		else{
 
-			printf("mycp does not accenpt %s as an option\n", argv[1]);
+			printf("mycp: invalid option -- %s", argv[1]);
+			//printf("mycp does not accenpt %s as an option\n", argv[1]);
 
 			return -1;
 		}
@@ -290,7 +319,8 @@ int main(int argc, char *argv[]){
 
 	if(argc > 4){
 
-		printf("mycp does not accenpt %d arguments\n", argc);
+		usage();
+		//printf("mycp does not accenpt %d arguments\n", argc);
 
 		return -1;
 	}
