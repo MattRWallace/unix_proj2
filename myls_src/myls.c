@@ -40,12 +40,12 @@ int main(int argc, char *argv[]){
     options = FTS_PHYSICAL;
     print_func = printCol;
 
+    column_flag = 1;
     if(isatty(STDOUT_FILENO)){
         if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &win) == 0 && win.ws_col > 0)
             termwidth = win.ws_col;
         column_flag = 1;
     }
-    else column_flag = 0;
 
     while((opt = getopt(argc, argv, "l")) != -1){
 
