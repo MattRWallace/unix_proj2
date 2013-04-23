@@ -90,9 +90,14 @@ static void traverse(char *argv[]){
             break;
         list = fts_children(fp,options);
         display(list);
+        if(!(cur == NULL && errno != 0))
+            (void)fts_set(fp, cur, FTS_SKIP);
+        //if(cur->fts_info == FTS_ERR || cur->fts_info == FTS_DNR){
         if(errno)
-            err(1, "");
+            err(1,"");
     }
+
+
 
 }
 
@@ -142,7 +147,7 @@ static void display(FTSENT *list){
     fi.max_user_name = max_user_name;
     fi.max_group_name = max_group_name;
     fi.max_name_len = max_name_len;
-    fi.total_blocksize = total_blocksize / 2;
+    fi.total_blocksize = total_blocksize;
     fi.entries = entries;
     fi.list = list;
     print_func(&fi);
