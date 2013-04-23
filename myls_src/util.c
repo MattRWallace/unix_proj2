@@ -1,6 +1,8 @@
-#define _XOPEN_SOURCE   600
+//#define _XOPEN_SOURCE   600
 
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <fts.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -13,10 +15,8 @@ void usage(void){
     exit(1);
 }
 
-int filter(const struct dirent *d){
-    if(*(d->d_name) == '.')
-        return 0;
-    else return 1;
+int filter(const FTSENT *a, const FTSENT *b){
+    return (strcasecmp(a->fts_name, b->fts_name));
 }
 
 int numLen(long int x){

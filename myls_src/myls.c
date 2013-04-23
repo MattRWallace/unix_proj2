@@ -4,33 +4,41 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <fts.h>
+#include <pwd.h>
+#include <grp.h>
+#include <err.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <dirent.h>
-#include <err.h>
 #include <unistd.h>
 #include <termios.h>
-#include <pwd.h>
-#include <grp.h>
 #include <locale.h>
 #include <math.h>
 #include <string.h>
 
 #include "myls.h"
 
-
-static void display(char *);
+static void (*print_func)(FINFO *);
+static void traverse(char *argv[]);
+static void display(FTSENT *list);
+static int compare(const FTSENT **a, const FTSENT **b);
 
 int termwidth = 80; /*Default terminal width*/
+int options;
+int level;
 
 /*Flag*/
 int column_flag; /*Column format flag*/
 
 int main(int argc, char *argv[]){
-    char *curDir = "./";
+    char dot[] = ".";
+    char *curDir[] = {dot, NULL};
     struct winsize win;
     int opt;
+    options = FTS_PHYSICAL;
+    print_func = printCol;
 
     if(isatty(STDOUT_FILENO)){
         if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &win) == 0 && win.ws_col > 0)
@@ -52,85 +60,95 @@ int main(int argc, char *argv[]){
         }
     argc -= optind;
     argv += optind;
+
+    if(column_flag == 0) print_func = printSCol;
     if(argc)
-        display(*argv);
+        traverse(argv);
     else
-        display(curDir);
+        traverse(curDir);
     return 0;
 }
+static void traverse(char *argv[]){
+    FTS *fp;
+    FTSENT *list, *ptr, *cur;
 
-static void display(char *argv){
-    int entries, i, len, max_name_len;
-    char *path;
-    struct dirent **ent;
-    struct stat stat;
+    if((fp = fts_open(argv, options, compare)) == NULL)
+       err(1, NULL);
 
-    lstat(argv, &stat);
-    if(stat.st_mode & S_IFDIR){
-        if((entries = scandir(argv, &ent, filter, alphasort)) == -1)
-            err(EXIT_FAILURE, NULL);
+    list = fts_children(fp, 0);
+    level = 0;
+    if(list->fts_info == FTS_F)
+        display(list);
 
-        len = strlen(argv);
-        if(argv[len] != '/'){
-            path = (char *) malloc(len + 1);
-            path[0] = '\0';
-            for(i = 0; i < len; i++)
-                path[i] = argv[i];
-            path[len] = '/';
-            len++;
-        }
-        else{
-            path = argv;
-        }
+    if(column_flag == 1)
+        options = FTS_NAMEONLY;
+    else options = 0;
+
+    level = 1;
+    while((cur = fts_read(fp)) != NULL){
+        if(cur->fts_name[0] == '.' && cur->fts_level != FTS_ROOTLEVEL)
+            break;
+        list = fts_children(fp,options);
+        display(list);
     }
 
-    if(column_flag){
-        for(i = 0; i < entries; ++i){
-            if((len=strlen(ent[i]->d_name)) > max_name_len)
-                max_name_len = len;
-        }
-        printCol(ent, entries, max_name_len);
-    }
-    else{
-        FINFO fsi;
-        int max, blocksize = 0;
-        char* fullpath;
-        struct stat *st;
-        struct passwd *pw;
-        struct group *grp;
-        fsi.max_hardlinks = 0;
-        fsi.max_file_size = 0;
-        fsi.max_user_name = 0;
-        fsi.max_group_name = 0;
-        st = (struct stat*) malloc(entries * sizeof(struct stat));
-        for(i = 0; i < entries; ++i){
-            fullpath = (char *) malloc(len + strlen(ent[i]->d_name) + 1);
-            fullpath[0] = '\0';
-            strcat(fullpath, path);
-            strcat(fullpath, ent[i]->d_name);
-            lstat(fullpath, &st[i]);
-            if((max = numLen((long int)st[i].st_nlink)) > fsi.max_hardlinks)
-                fsi.max_hardlinks = max;
-            if((max = numLen((long int)st[i].st_size)) > fsi.max_file_size)
-                fsi.max_file_size = max;
-            pw = getpwuid(st[i].st_uid);
-            if((max = strlen(pw->pw_name)) > fsi.max_user_name)
-                fsi.max_user_name = max;
-            grp = getgrgid(st[i].st_gid);
-            if((max = strlen(grp->gr_name)) > fsi.max_group_name)
-                fsi.max_group_name = max;
-            blocksize += st[i].st_blocks;
-        }
-        fsi.ent = ent;
-        fsi.stat = st;
-        fsi.total_blocksize = blocksize;
-        printSCol(fsi, entries);
-        free(st);
-        free(path);
-        free(fullpath);
-    }
 }
 
+static void display(FTSENT *list){
+    int entries, i, len, max_name_len, total_blocksize, max_file_size,
+        max_hardlinks, max_user_name, max_group_name;
+    struct stat *st;
+    struct passwd *pw;
+    struct group *grp;
+    FINFO fi;
+    FTS *fp;
+    FTSENT *ptr;
+
+    entries = 0;
+    max_name_len = total_blocksize = max_hardlinks = max_file_size = max_user_name = max_group_name = 0;
+    for(ptr = list, max_name_len =0; ptr != NULL; ptr = ptr->fts_link){
+        if(ptr->fts_level != level) continue;
+        if(ptr->fts_name[0] == '.') ptr->fts_number = 1;
+        if(ptr->fts_name[0] != '.'){
+            if(column_flag == 0){
+                st = ptr->fts_statp;
+                total_blocksize += st->st_blocks;
+                if((len = ptr->fts_namelen) > max_name_len)
+                    max_name_len = len;
+                if((len = numLen((long int)st->st_nlink)) > max_hardlinks)
+                    max_hardlinks = len;
+                if((len = numLen((long int)st->st_size)) > max_file_size)
+                    max_file_size = len;
+                pw = getpwuid(st->st_uid);
+                if((len = strlen(pw->pw_name)) > max_user_name)
+                    max_user_name = len;
+                grp = getgrgid(st->st_gid);
+                if((len = strlen(grp->gr_name)) > max_group_name)
+                    max_group_name = len;
+                entries++;
+            }
+            else{
+                if((len = ptr->fts_namelen) > max_name_len)
+                    max_name_len = len;
+            }
+            entries++;
+        }
+    }
+    if(entries == 0) return;
+    fi.max_file_size = max_file_size;
+    fi.max_hardlinks = max_hardlinks;
+    fi.max_user_name = max_user_name;
+    fi.max_group_name = max_group_name;
+    fi.max_name_len = max_name_len;
+    fi.total_blocksize = total_blocksize / 2;
+    fi.entries = entries;
+    fi.list = list;
+    print_func(&fi);
+}
+
+static int compare(const FTSENT **a, const FTSENT **b){
+    return filter(*a, *b);
+}
 
 
 

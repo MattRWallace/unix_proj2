@@ -1,4 +1,7 @@
+#include <sys/types.h>
 #include <sys/stat.h>
+
+#include <fts.h>
 #include <dirent.h>
 #include <pwd.h>
 #include <grp.h>
@@ -15,39 +18,51 @@
 static void printtime(time_t time);
 
 /* Single column print format */
-void printSCol(FINFO fsi, int entries){
-    int row;
+void printSCol(FINFO *fsi){
+    struct stat *st;
     struct passwd *pw;
     struct group *grp;
+    FTSENT *cur;
 
-    printf("total %ld\n", fsi.total_blocksize);
-    for(row = 0; row < entries; row++){
-        printf("%-10.10s  ", sperm(fsi.stat[row].st_mode));
-        printf("%*d ", fsi.max_hardlinks, (int)fsi.stat[row].st_nlink);
-        pw = getpwuid(fsi.stat[row].st_uid);
-        printf("%*s  ", fsi.max_user_name, pw->pw_name);
-        grp = getgrgid(fsi.stat[row].st_gid);
-        printf("%*s  ", fsi.max_group_name, grp->gr_name);
-        printf("%*ld ", fsi.max_file_size,(long int)fsi.stat[row].st_size);
-        printtime(fsi.stat[row].st_mtime);
-        printf("%s\n", fsi.ent[row]->d_name);
+    printf("total %ld\n", fsi->total_blocksize);
+    for(cur = fsi->list; cur != NULL; cur = cur->fts_link){
+        if(cur->fts_number == 1) continue;
+        st = cur->fts_statp;
+        printf("%-10.10s  ", sperm(st->st_mode));
+        printf("%*d ", fsi->max_hardlinks, (int)st->st_nlink);
+        pw = getpwuid(st->st_uid);
+        printf("%*s ", fsi->max_user_name, pw->pw_name);
+        grp = getgrgid(st->st_gid);
+        printf("%*s ", fsi->max_group_name, grp->gr_name);
+        printf("%*ld ", fsi->max_file_size,(long int)st->st_size);
+        printtime(st->st_mtime);
+        printf("%s\n", cur->fts_name);
     }
 }
 
 /* Multi column print format for listing files not requiring stat information */
-void printCol(struct dirent **ent, const int entries, const int max_name_len){
-    int numcols, numrows, row, col, colwidth, base, charCount;
+void printCol(FINFO *fsi){
+    int i, numcols, numrows, row, col, colwidth, base, charCount, entries, max_name_len;
+    FTSENT **parray;
+    FTSENT *p;
+    entries = fsi->entries;
+    max_name_len = fsi->max_name_len;
 
-    colwidth = (int)(log((double)max_name_len) / log(2));
-    colwidth = 8 * (colwidth - 1);
-    numcols = (termwidth + colwidth) / colwidth;
+    colwidth = max_name_len + 2;
+    numcols  = (termwidth +1)/colwidth;
+    colwidth = (termwidth +1)/numcols;
     numrows = entries / numcols;
     if(numrows % numcols || numrows == 0)
         numrows++;
 
+    parray = (FTSENT **) malloc(entries * sizeof(FTSENT *));
+    for(p = fsi->list, i = 0; p != NULL; p = p->fts_link)
+        if(p->fts_number != 1)
+            parray[i++] = p;
+
     for(row = 0; row < numrows; row++){
         for(base = row, col = 0;;){
-            charCount =  printf("%s", ent[base]->d_name);
+            charCount =  printf("%-s", parray[base]->fts_name);
             if((base += numrows) >= entries) break;
             if(++col == numcols) break;
             while(charCount++ < colwidth) (void)putchar(' ');
@@ -55,6 +70,7 @@ void printCol(struct dirent **ent, const int entries, const int max_name_len){
         }
         (void)putchar('\n');
     }
+
 }
 
 static void printtime(time_t mtime)

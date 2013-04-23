@@ -1,15 +1,14 @@
 CC          = gcc
 LDFLAGS     = -lm
-CFLAGS      = -Wall -pedantic -g
+CFLAGS      = -Wall -pedantic -g -std=c99
 DEPS        = myls.h
 OBJ         = myls.o print.o util.o
-CFLAGS      = -pedantic -g -std=c99
 
 EXEC        = myls
 
 
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS) $(LDFLAGS)
+	$(CC) -c -o $@ $< $(CLFAGS) $(LDFLAGS)
 
 ../$(EXEC): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)

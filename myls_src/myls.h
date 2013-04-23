@@ -1,22 +1,20 @@
-
-extern int termwidth;
-
 typedef struct {
-    struct dirent **ent;
-    struct stat *stat;
-    char **f_name;
+    FTSENT *list;
     long int total_blocksize;
     int max_file_size;
     int max_hardlinks;
     int max_user_name;
     int max_group_name;
+    int max_name_len;
+    int entries;
 } FINFO;
 
+extern int termwidth;
 
-int filter(const struct dirent *d);
+int filter(const FTSENT *a, const FTSENT *b);
 int numLen(long int x);
 char const *sperm(int mode);
 
 void usage(void);
-void printCol(struct dirent **, const int, const int);
-void printSCol(FINFO fsi, int entries);
+void printCol(FINFO *fsi);
+void printSCol(FINFO *fsi);
