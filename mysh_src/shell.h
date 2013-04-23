@@ -216,8 +216,10 @@ int exec(char* comm, char** result, char* inputStr) {
 			returnFlag = 1;
 		}
 
+		/*
 		if (inputStr)
 			nl2space(*result);
+			*/
 
 		return returnFlag;
 	}
