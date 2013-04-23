@@ -185,10 +185,10 @@ int exec(char* comm, char** result, char* inputStr) {
 		// close the write end of the pipe
 		close(pfd[1]);
 
-		// wait for child and return in child failed
+		// wait for child and return if child failed
 		waitpid(cpid, &status, 0);
 		if (WIFEXITED(status) &&  WEXITSTATUS(status) != 0) {
-			return -1;
+			return -2;
 		}
 
 		// restore stdout
@@ -316,6 +316,7 @@ int processPipes(char* lineRead) {
 		}
 		else {                     // not first command
 			char* temp = 0;
+			//nl2space(last);
 			status = exec(pipes[i], &temp, last);
 			free(last);
 			last = temp;
@@ -324,6 +325,8 @@ int processPipes(char* lineRead) {
 			fprintf(stderr, "command not found: %s\n", pipes[i]);
 			break;
 		}
+		if (status == -2)
+			break;
 		if (! pipes[i+1] && status == 0) {        // last command
 			printf("%s", last);
 			/*
@@ -357,6 +360,7 @@ char* resolveSubshells(const char* line) {
 
 		char*  subshellDump = 0;
 		exec(subcmd, &subshellDump, 0);
+		nl2space(subshellDump);
 
 		size_t tempSize = (originSize - subSize + strlen(subshellDump));
 		char* temp = malloc(sizeof(char) * (tempSize + 1));
