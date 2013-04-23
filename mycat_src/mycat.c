@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE   200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,7 +12,7 @@ int main(int argc, char* argv[])
 	struct stat fileStat;
 	int i;
 	int c;
-	
+
 	if (argc == 1)
 	{
 		size_t size = 256;
@@ -26,7 +28,7 @@ int main(int argc, char* argv[])
 		free(str);
 		return EXIT_SUCCESS;
 	}
-	
+
 	for (i = 1; i < argc; i++)
 	{
 		if(stat(argv[i], &fileStat) < 0)
@@ -34,13 +36,13 @@ int main(int argc, char* argv[])
 			printf("mycat: %s: The file failed to open\n", argv[i]);
 			continue;
 		}
-		
+
 		if (S_ISDIR(fileStat.st_mode))
 		{
 			printf("mycat: %s: The file is a directory\n", argv[i]);
 			continue;
 		}
-		
+
 		fp = fopen(argv[i], "r");
 		if (fp == NULL)
 		{
@@ -54,11 +56,11 @@ int main(int argc, char* argv[])
 				break;
 			printf("%c", c);
 		}
-		
-		
+
+
 		fclose(fp);
 	}
-	
-	
+
+
 	return EXIT_SUCCESS;
 }
