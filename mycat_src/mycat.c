@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <err.h>
 
 int main(int argc, char* argv[])
 {
@@ -33,20 +34,23 @@ int main(int argc, char* argv[])
 	{
 		if(stat(argv[i], &fileStat) < 0)
 		{
-			printf("mycat: %s: The file failed to open\n", argv[i]);
+			//printf("mycat: %s: The file failed to open\n", argv[i]);
+			warn("%s", argv[i]);
 			continue;
 		}
 
 		if (S_ISDIR(fileStat.st_mode))
 		{
-			printf("mycat: %s: The file is a directory\n", argv[i]);
+			//printf("mycat: %s: The file is a directory\n", argv[i]);
+			warn("%s", argv[i]);
 			continue;
 		}
 
 		fp = fopen(argv[i], "r");
 		if (fp == NULL)
 		{
-			printf("mycat: %s: No such file or directory.\n", argv[i]);
+			//printf("mycat: %s: No such file or directory.\n", argv[i]);
+			warn("%s", argv[i]);
 			continue;
 		}
 
