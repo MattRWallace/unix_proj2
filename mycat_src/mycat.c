@@ -1,71 +1,61 @@
-#define _POSIX_C_SOURCE   200809L
+#define _XOPEN_SOURCE   500
 
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
-#include <stdbool.h>
+#include <string.h>
+#include <sys/types.h>
 #include <sys/stat.h>
-#include <err.h>
+#include <fcntl.h>
 
-int main(int argc, char* argv[])
-{
-	FILE* fp;
-	struct stat fileStat;
-	int i;
-	int c;
+#define LARGE_BUFF 4096
+
+int cat(int);
+
+int main(int argc, char** argv) {
 
 	if (argc == 1)
-	{
-		size_t size = 256;
-		char* str = (char*) malloc(size);
-		int count;
-		while (true)
-		{
-			count = getline(&str, &size, stdin);
-			if (count == -1)
+		cat(0);
+
+	else {
+		int fd;
+		for (size_t i = 1; i < argc; ++i) {
+			struct stat file;
+
+			// get file information
+			if (stat(argv[i], &file) == -1) {
+				perror("mycat");
 				break;
-			printf("%s", str);
+			}
+
+			// print error and skip if a directory
+			if ((file.st_mode & S_IFMT) == S_IFDIR) {
+				fprintf(stderr, "mycat: %s is a directory\n", argv[i]);
+				continue;
+			}
+
+			if ((fd = open(argv[i], O_RDONLY)) == -1) {
+				fprintf(stderr, "Could not open file %s", argv[i]);
+				break;
+			}
+			if (cat(fd) < 0) {
+				fprintf(stderr, "Error reading file: %s\n", argv[i]);
+			}
+			close(fd);
 		}
-		free(str);
-		return EXIT_SUCCESS;
 	}
 
-	for (i = 1; i < argc; i++)
-	{
-		fp = fopen(argv[i], "r");
-		if (fp == NULL)
-		{
-			//printf("mycat: %s: No such file or directory.\n", argv[i]);
-			warn("%s", argv[i]);
-			continue;
-		}
+	return 0;
+}
 
-		if(fp != NULL && stat(argv[i], &fileStat) < 0)
-		{
-			//printf("mycat: %s: The file failed to open\n", argv[i]);
-			warn("%s", argv[i]);
-			continue;
-		}
+int cat(int fd) {
+	char buf[LARGE_BUFF];
+	size_t bytesRead = 0;
 
-		if (S_ISDIR(fileStat.st_mode))
-		{
-			//printf("mycat: %s: The file is a directory\n", argv[i]);
-			warn("%s", argv[i]);
-			continue;
-		}
-
-
-		while (c = fgetc(fp))
-		{
-			if (c == EOF)
-				break;
-			printf("%c", c);
-		}
-
-
-		fclose(fp);
+	while((bytesRead = read(fd, buf, LARGE_BUFF - 1)) > 0) {
+		if (write(1, buf, bytesRead) < 0)
+			perror("stdout");
 	}
 
-
-	return EXIT_SUCCESS;
+	return bytesRead;
 }
