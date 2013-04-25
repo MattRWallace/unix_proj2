@@ -32,7 +32,15 @@ int main(int argc, char* argv[])
 
 	for (i = 1; i < argc; i++)
 	{
-		if(stat(argv[i], &fileStat) < 0)
+		fp = fopen(argv[i], "r");
+		if (fp == NULL)
+		{
+			//printf("mycat: %s: No such file or directory.\n", argv[i]);
+			warn("%s", argv[i]);
+			continue;
+		}
+
+		if(fp != NULL && stat(argv[i], &fileStat) < 0)
 		{
 			//printf("mycat: %s: The file failed to open\n", argv[i]);
 			warn("%s", argv[i]);
@@ -46,13 +54,6 @@ int main(int argc, char* argv[])
 			continue;
 		}
 
-		fp = fopen(argv[i], "r");
-		if (fp == NULL)
-		{
-			//printf("mycat: %s: No such file or directory.\n", argv[i]);
-			warn("%s", argv[i]);
-			continue;
-		}
 
 		while (c = fgetc(fp))
 		{
