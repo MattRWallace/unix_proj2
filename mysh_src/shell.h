@@ -333,6 +333,7 @@ int processPipes(char* lineRead) {
 		}
 	}
 	free(last);
+	free(pipes);
 }
 
 char* resolveSubshells(const char* line) {
